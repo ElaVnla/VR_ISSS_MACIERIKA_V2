@@ -1,49 +1,24 @@
 using UnityEngine;
-
 public class HandCollisions : MonoBehaviour
 {
-    
+    // Set one or more wall layers in the Inspector
     public LayerMask wallMask;
-    public LayerMask interactableMask;
-
-    
+    // Other scripts read this
     public bool isTouching = false;
-
-    bool touchingWall = false;
-    bool touchingInteractable = false;
-
+    // Small helper so you never see bit math outside this method
+    bool IsWallLayer(int layer)
+    {
+        int layerBit = 1 << layer;
+        return (wallMask.value & layerBit) != 0;
+    }
     void OnTriggerEnter(Collider other)
     {
-        int bit = 1 << other.gameObject.layer;
-
-        if ((wallMask.value & bit) != 0)
-            touchingWall = true;
-
-        if ((interactableMask.value & bit) != 0)
-            touchingInteractable = true;
-
-        UpdateIsTouching();
+        if (IsWallLayer(other.gameObject.layer))
+            isTouching = true;
     }
-
     void OnTriggerExit(Collider other)
     {
-        int bit = 1 << other.gameObject.layer;
-
-        if ((wallMask.value & bit) != 0)
-            touchingWall = false;
-
-        if ((interactableMask.value & bit) != 0)
-            touchingInteractable = false;
-
-        UpdateIsTouching();
-    }
-
-    void UpdateIsTouching()
-    {
-       
-        if (touchingWall && !touchingInteractable)
-            isTouching = true;
-        else
+        if (IsWallLayer(other.gameObject.layer))
             isTouching = false;
     }
 }
