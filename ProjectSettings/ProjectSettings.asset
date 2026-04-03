@@ -272,8 +272,8 @@ PlayerSettings:
   AndroidAllowedArchitectures: -13
   AndroidSplashScreenScale: 0
   androidSplashScreen: {fileID: 0}
-  AndroidKeystoreName: '{inproject}: VRISSSKey.keystore'
-  AndroidKeyaliasName: vrisss
+  AndroidKeystoreName: '{inproject}: user.keystore'
+  AndroidKeyaliasName: idk
   AndroidEnableArmv9SecurityFeatures: 0
   AndroidEnableArm64MTE: 0
   AndroidBuildApkPerCpuArchitecture: 0
