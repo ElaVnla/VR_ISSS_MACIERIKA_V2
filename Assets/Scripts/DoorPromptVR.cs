@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.SceneManagement;
 using UnityEngine.XR;
 using UnityEngine.XR.Interaction.Toolkit;
 using UnityEngine.XR.Interaction.Toolkit.Interactables;
@@ -18,16 +19,17 @@ public class DoorPromptVR : MonoBehaviour
 
     [Header("Lever")]
     public HingeJoint leverHinge;
-
-    [Tooltip("How many degrees the lever must move from its starting UP position before it counts as complete")]
     public float leverRequiredAngleChange = 25f;
-
-    [Tooltip("Turn this ON if pulling the lever DOWN makes the hinge angle go smaller/negative. Turn OFF if pulling DOWN makes the angle go bigger/positive.")]
-    public bool downMeansAngleDecreases = true;
+    public bool downMeansAngleIncrease = true;
 
     [Header("Scene Change On Win")]
-    public SceneController sceneController;
     public string winSceneName;
+
+    [Header("Lose Haptics")]
+    [Range(0f, 1f)] public float loseHapticAmplitude = 0.7f;
+    public float loseHapticDuration = 0.2f;
+    public bool vibrateLeftController = true;
+    public bool vibrateRightController = true;
 
     [Header("Debug State")]
     [SerializeField] private bool startDockPressed = false;
@@ -44,6 +46,7 @@ public class DoorPromptVR : MonoBehaviour
     {
         if (tempStartDock != null)
         {
+            tempStartDock.hoverEntered.AddListener(OnStartDockHover);
             tempStartDock.selectEntered.AddListener(OnStartDockSelect);
         }
     }
@@ -52,6 +55,7 @@ public class DoorPromptVR : MonoBehaviour
     {
         if (tempStartDock != null)
         {
+            tempStartDock.hoverEntered.RemoveListener(OnStartDockHover);
             tempStartDock.selectEntered.RemoveListener(OnStartDockSelect);
         }
     }
@@ -109,20 +113,11 @@ public class DoorPromptVR : MonoBehaviour
         if (leverHinge == null || grabLeverPressed) return;
 
         currentLeverAngle = leverHinge.angle;
-
-        // Measures how much the lever has rotated from its starting position
         signedLeverDelta = Mathf.DeltaAngle(startLeverAngle, currentLeverAngle);
 
-        bool leverComplete;
-
-        if (downMeansAngleDecreases)
-        {
-            leverComplete = signedLeverDelta <= -leverRequiredAngleChange;
-        }
-        else
-        {
-            leverComplete = signedLeverDelta >= leverRequiredAngleChange;
-        }
+        bool leverComplete = downMeansAngleIncrease
+            ? signedLeverDelta >= leverRequiredAngleChange
+            : signedLeverDelta <= -leverRequiredAngleChange;
 
         if (leverComplete)
         {
@@ -136,35 +131,83 @@ public class DoorPromptVR : MonoBehaviour
                   " | Complete: " + grabLeverPressed);
     }
 
+    private void OnStartDockHover(HoverEnterEventArgs args)
+    {
+        startDockPressed = true;
+        Debug.Log("Start Dock registered by HOVER");
+    }
+
     private void OnStartDockSelect(SelectEnterEventArgs args)
     {
         startDockPressed = true;
         Debug.Log("Start Dock registered by SELECT");
     }
 
+    private void TriggerLoseHaptics()
+    {
+        if (vibrateLeftController)
+            SendHapticToNode(XRNode.LeftHand, loseHapticAmplitude, loseHapticDuration);
+
+        if (vibrateRightController)
+            SendHapticToNode(XRNode.RightHand, loseHapticAmplitude, loseHapticDuration);
+    }
+
+    private void SendHapticToNode(XRNode node, float amplitude, float duration)
+    {
+        InputDevice device = InputDevices.GetDeviceAtXRNode(node);
+
+        if (!device.isValid)
+        {
+            Debug.LogWarning(node + " controller is not valid for haptics.");
+            return;
+        }
+
+        if (device.TryGetHapticCapabilities(out HapticCapabilities capabilities))
+        {
+            if (capabilities.supportsImpulse)
+            {
+                device.SendHapticImpulse(0u, amplitude, duration);
+                Debug.Log("Haptic sent to " + node);
+            }
+            else
+            {
+                Debug.LogWarning(node + " does not support haptic impulse.");
+            }
+        }
+        else
+        {
+            Debug.LogWarning("Could not get haptic capabilities for " + node);
+        }
+    }
+
     private void CheckTaskResult()
     {
         Debug.Log("Checking result...");
         Debug.Log("StartDock = " + startDockPressed + ", GrabLever = " + grabLeverPressed);
-        Debug.Log("Lever delta = " + signedLeverDelta);
 
         if (startDockPressed && grabLeverPressed)
         {
             resultTriggered = true;
             Debug.Log("WIN");
 
-            if (sceneController != null && !string.IsNullOrEmpty(winSceneName))
+            if (losePopup != null) losePopup.SetActive(false);
+
+            if (!string.IsNullOrEmpty(winSceneName))
             {
-                sceneController.ChangeScene(winSceneName);
+                Debug.Log("Loading scene: " + winSceneName);
+                SceneManager.LoadScene(winSceneName);
             }
             else
             {
-                Debug.LogWarning("SceneController or winSceneName is missing.");
+                Debug.LogWarning("winSceneName is empty.");
             }
         }
         else
         {
             if (losePopup != null) losePopup.SetActive(true);
+
+            TriggerLoseHaptics();
+
             Debug.Log("LOSE");
         }
     }
