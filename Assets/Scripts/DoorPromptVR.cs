@@ -7,36 +7,44 @@ public class DoorPromptVR : MonoBehaviour
 {
     [Header("UI")]
     public GameObject promptText;
-    public GameObject winPopup;
     public GameObject losePopup;
 
     [Header("Player")]
     public Transform player;
     public float activationDistance = 0.3f;
 
-    [Header("Buttons to Track")]
+    [Header("Start Dock Button")]
     public XRSimpleInteractable tempStartDock;
-    public XRSimpleInteractable tempGrabLever;
+
+    [Header("Lever")]
+    public HingeJoint leverHinge;
+
+    [Tooltip("How many degrees the lever must move from its starting UP position before it counts as complete")]
+    public float leverRequiredAngleChange = 25f;
+
+    [Tooltip("Turn this ON if pulling the lever DOWN makes the hinge angle go smaller/negative. Turn OFF if pulling DOWN makes the angle go bigger/positive.")]
+    public bool downMeansAngleDecreases = true;
+
+    [Header("Scene Change On Win")]
+    public SceneController sceneController;
+    public string winSceneName;
 
     [Header("Debug State")]
     [SerializeField] private bool startDockPressed = false;
     [SerializeField] private bool grabLeverPressed = false;
+    [SerializeField] private float startLeverAngle = 0f;
+    [SerializeField] private float currentLeverAngle = 0f;
+    [SerializeField] private float signedLeverDelta = 0f;
 
     private bool playerNearby = false;
     private bool bWasPressedLastFrame = false;
+    private bool resultTriggered = false;
 
     private void OnEnable()
     {
         if (tempStartDock != null)
         {
-            tempStartDock.hoverEntered.AddListener(OnStartDockHover);
             tempStartDock.selectEntered.AddListener(OnStartDockSelect);
-        }
-
-        if (tempGrabLever != null)
-        {
-            tempGrabLever.hoverEntered.AddListener(OnGrabLeverHover);
-            tempGrabLever.selectEntered.AddListener(OnGrabLeverSelect);
         }
     }
 
@@ -44,25 +52,27 @@ public class DoorPromptVR : MonoBehaviour
     {
         if (tempStartDock != null)
         {
-            tempStartDock.hoverEntered.RemoveListener(OnStartDockHover);
             tempStartDock.selectEntered.RemoveListener(OnStartDockSelect);
         }
+    }
 
-        if (tempGrabLever != null)
+    private void Start()
+    {
+        if (promptText != null) promptText.SetActive(false);
+        if (losePopup != null) losePopup.SetActive(false);
+
+        if (leverHinge != null)
         {
-            tempGrabLever.hoverEntered.RemoveListener(OnGrabLeverHover);
-            tempGrabLever.selectEntered.RemoveListener(OnGrabLeverSelect);
+            startLeverAngle = leverHinge.angle;
+            Debug.Log("Lever START angle recorded as: " + startLeverAngle);
+        }
+        else
+        {
+            Debug.LogWarning("Lever Hinge is not assigned.");
         }
     }
 
-    void Start()
-    {
-        if (promptText != null) promptText.SetActive(false);
-        if (winPopup != null) winPopup.SetActive(false);
-        if (losePopup != null) losePopup.SetActive(false);
-    }
-
-    void Update()
+    private void Update()
     {
         if (player == null) return;
 
@@ -72,9 +82,11 @@ public class DoorPromptVR : MonoBehaviour
         if (promptText != null)
             promptText.SetActive(playerNearby);
 
+        UpdateLeverState();
+
         bool bPressedNow = IsBPressed();
 
-        if (playerNearby && bPressedNow && !bWasPressedLastFrame)
+        if (!resultTriggered && playerNearby && bPressedNow && !bWasPressedLastFrame)
         {
             CheckTaskResult();
         }
@@ -92,11 +104,36 @@ public class DoorPromptVR : MonoBehaviour
         return false;
     }
 
-    // --- Temp Start Dock ---
-    private void OnStartDockHover(HoverEnterEventArgs args)
+    private void UpdateLeverState()
     {
-        startDockPressed = true;
-        Debug.Log("Start Dock registered by HOVER");
+        if (leverHinge == null || grabLeverPressed) return;
+
+        currentLeverAngle = leverHinge.angle;
+
+        // Measures how much the lever has rotated from its starting position
+        signedLeverDelta = Mathf.DeltaAngle(startLeverAngle, currentLeverAngle);
+
+        bool leverComplete;
+
+        if (downMeansAngleDecreases)
+        {
+            leverComplete = signedLeverDelta <= -leverRequiredAngleChange;
+        }
+        else
+        {
+            leverComplete = signedLeverDelta >= leverRequiredAngleChange;
+        }
+
+        if (leverComplete)
+        {
+            grabLeverPressed = true;
+            Debug.Log("Lever pulled DOWN and marked complete.");
+        }
+
+        Debug.Log("Lever Start: " + startLeverAngle +
+                  " | Current: " + currentLeverAngle +
+                  " | Delta: " + signedLeverDelta +
+                  " | Complete: " + grabLeverPressed);
     }
 
     private void OnStartDockSelect(SelectEnterEventArgs args)
@@ -105,34 +142,29 @@ public class DoorPromptVR : MonoBehaviour
         Debug.Log("Start Dock registered by SELECT");
     }
 
-    // --- Temp Grab Lever ---
-    private void OnGrabLeverHover(HoverEnterEventArgs args)
-    {
-        grabLeverPressed = true;
-        Debug.Log("Grab Lever registered by HOVER");
-    }
-
-    private void OnGrabLeverSelect(SelectEnterEventArgs args)
-    {
-        grabLeverPressed = true;
-        Debug.Log("Grab Lever registered by SELECT");
-    }
-
     private void CheckTaskResult()
     {
         Debug.Log("Checking result...");
         Debug.Log("StartDock = " + startDockPressed + ", GrabLever = " + grabLeverPressed);
+        Debug.Log("Lever delta = " + signedLeverDelta);
 
         if (startDockPressed && grabLeverPressed)
         {
-            if (winPopup != null) winPopup.SetActive(true);
-            if (losePopup != null) losePopup.SetActive(false);
+            resultTriggered = true;
             Debug.Log("WIN");
+
+            if (sceneController != null && !string.IsNullOrEmpty(winSceneName))
+            {
+                sceneController.ChangeScene(winSceneName);
+            }
+            else
+            {
+                Debug.LogWarning("SceneController or winSceneName is missing.");
+            }
         }
         else
         {
             if (losePopup != null) losePopup.SetActive(true);
-            if (winPopup != null) winPopup.SetActive(false);
             Debug.Log("LOSE");
         }
     }
