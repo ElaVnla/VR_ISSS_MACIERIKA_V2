@@ -1,7 +1,7 @@
 using UnityEngine;
 using UnityEngine.XR.Interaction.Toolkit.Inputs.Haptics;
 
-public class ProximityTwo : MonoBehaviour
+public class ProximityHaptics : MonoBehaviour
 {
     public Transform targetObject;
     public Transform targetObject2;
@@ -64,3 +64,4 @@ public class ProximityTwo : MonoBehaviour
 
     }
 }
+
