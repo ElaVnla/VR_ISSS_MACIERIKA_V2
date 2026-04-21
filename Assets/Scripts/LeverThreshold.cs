@@ -25,6 +25,7 @@ public class LeverDebug : MonoBehaviour
             hasTriggered = true;
             Debug.Log("Triggered at angle: " + hinge.angle);
             timeline.Play();
+
         }
 
         if (hasTriggered && hinge.angle < triggerAngle)
